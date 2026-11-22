@@ -9,7 +9,8 @@ const CONFIG = {
   supabaseKey: 'sb_publishable_VmJzx86G5PeNmazwCRXWgQ_Wdgaz5EC',
   consentVersion: '2026-11-20-v2'
 };
-const C = window.SITE_CONTENT || {};
+const DEFAULTS = window.SITE_CONTENT || {};
+let C = DEFAULTS;
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -79,7 +80,7 @@ function Quote(cfg) {
   const sheet = $('#quote'); if (!sheet || !cfg) return null;
   const form = $('#qform', sheet), body = $('#qsteps', sheet), bar = $('#qbarFill', sheet), cnt = $('#qcount', sheet);
   const prev = $('#qprev', sheet), next = $('#qnext', sheet), err = $('#qerr', sheet), main = $('#qmain', sheet), done = $('#qdone', sheet);
-  const steps = cfg.steps; let cur = 0, submitting = false, requestId = null, lastFocus = null;
+  const steps = (cfg.steps || []).filter(s => !s.hidden); let cur = 0, submitting = false, requestId = null, lastFocus = null;
   const today = (() => { const d = new Date(); d.setMinutes(d.getMinutes() - d.getTimezoneOffset()); return d.toISOString().slice(0, 10); })();
   const optHtml = (s, type) => `<div class="opts${s.columns ? ' c' + s.columns : ''}">${s.options.map((o, i) => `<label class="opt"><input type="${type}" name="q_${esc(s.id)}" value="${i}"><span><b>${esc(o.label)}</b>${o.sub ? `<small>${esc(o.sub)}</small>` : ''}</span></label>`).join('')}</div>`;
   const srcOpts = (C.sources || ['홈페이지']).map(s => `<option>${esc(s)}</option>`).join('');
@@ -143,6 +144,7 @@ function Quote(cfg) {
   });
   async function submit() {
     if (submitting) return;
+    if (new URLSearchParams(location.search).get('preview') === '1') { err.textContent = '미리보기 화면에서는 견적이 접수되지 않습니다.'; return; }
     const svcStep = steps.find(s => s.id === 'service'); const svc = svcStep ? picked(svcStep)[0] : null;
     const memo = val('details');
     const details = ('[견적 질문지]\n' + summary() + (memo ? '\n\n[고객 요청 사항]\n' + memo : '')).slice(0, 1500);
@@ -186,8 +188,31 @@ function motion() {
   $$('[data-rv]').forEach((el, i) => { el.style.transitionDelay = (i % 4) * 70 + 'ms'; io.observe(el); });
 }
 
-bindText(); bindLists(); bindSite();
-const page = document.body.dataset.page;
-Quote(get(C, 'quote.' + page));
-motion();
+/* ── 시작: 게시된 내용 불러오기 (관리자 페이지에서 수정한 내용) ── */
+const isObj = v => v && typeof v === 'object' && !Array.isArray(v);
+function merge(def, over) { if (!isObj(def) || !isObj(over)) return over === undefined ? def : over; const o = Object.assign({}, def); Object.keys(over).forEach(k => { o[k] = merge(def[k], over[k]); }); return o; }
+function start(content) {
+  C = isObj(content) ? merge(DEFAULTS, content) : DEFAULTS;
+  bindText(); bindLists(); bindSite();
+  Quote(get(C, 'quote.' + document.body.dataset.page));
+  motion();
+  document.documentElement.classList.add('ready');
+}
+async function loadPublished() {
+  const ctrl = new AbortController(); const t = setTimeout(() => ctrl.abort(), 2500);
+  try {
+    const r = await fetch(CONFIG.supabaseUrl + '/rest/v1/site_content?id=eq.published&select=content', { signal: ctrl.signal, headers: { apikey: CONFIG.supabaseKey } });
+    if (!r.ok) return null; const rows = await r.json(); return rows && rows[0] ? rows[0].content : null;
+  } catch (e) { return null; } finally { clearTimeout(t); }
+}
+const params = new URLSearchParams(location.search);
+if (params.get('preview') === '1' && window.parent !== window) {
+  // 관리자 미리보기: 같은 사이트의 관리자 화면이 보낸 임시 내용으로 그립니다(저장되지 않음).
+  let started = false;
+  addEventListener('message', e => { if (e.origin !== location.origin || started) return; const d = e.data || {}; if (d.type === 'banjjak-preview' && isObj(d.content)) { started = true; start(d.content); } });
+  window.parent.postMessage({ type: 'banjjak-preview-ready' }, location.origin);
+  setTimeout(() => { if (!started) { started = true; start(null); } }, 4000);
+} else {
+  loadPublished().then(start);
+}
 })();

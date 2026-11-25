@@ -265,3 +265,16 @@ button{font:inherit;color:inherit;cursor:pointer}
 .pv-hi{outline:3px solid #ff7a00!important;outline-offset:6px;border-radius:6px;transition:outline-color .3s}
 #pvToast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);background:#1c1c1c;color:#fff;font-size:14px;padding:10px 16px;border-radius:999px;opacity:0;transition:all .3s;z-index:99;pointer-events:none;white-space:nowrap}
 #pvToast.show{opacity:1;transform:translate(-50%,0)}
+
+/* 줄바꿈 다듬기: 제목·설명 줄 길이를 고르게 */
+h1,h2,h3{text-wrap:balance}
+p{text-wrap:pretty}
+.sent{display:inline}
+@media(max-width:760px){
+  :root{--pad:28px}
+  .hero .lead .sent,.sec-hd p .sent,.home-hero p .sent,.note .sent{display:block}
+  .sec-hd p,.hero .lead,.home-hero p{text-wrap:balance}
+  .sheet .top,.qbar,.sheet .scroll,.qnav{padding-left:24px;padding-right:24px}
+  .mbar{padding-left:20px;padding-right:20px}
+  .tabpanel p,.scope-card li,.concern p,.step p,.faq .a{text-wrap:pretty}
+}

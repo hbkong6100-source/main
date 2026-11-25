@@ -41,7 +41,15 @@ function photo(src, label, tag, path) {
   return `<div class="photo"${path ? ` data-path="${esc(path)}"` : ''}>${s ? `<img src="${esc(s)}" alt="${esc(label)}" loading="lazy">` : `<div class="ph">${esc(label)}<br>실제 사진 등록 예정</div>`}${tag ? `<span class="tag">${esc(tag)}</span>` : ''}</div>`;
 }
 function bindText() {
-  $$('[data-c]').forEach(el => { const v = get(C, el.dataset.c); if (v != null) el.textContent = v; });
+  $$('[data-c]').forEach(el => {
+    const v = get(C, el.dataset.c); if (v == null) return;
+    if (el.tagName !== 'P') { el.textContent = v; return; }
+    // 문장 단위로 나눠서, 휴대폰에서는 문장마다 줄을 바꿉니다(관리자에서 넣은 줄바꿈도 유지).
+    el.replaceChildren(...String(v).split('\n').flatMap((line, i) => {
+      const parts = (line.match(/[^.!?]+[.!?]+["'”’)]*\s*|[^.!?]+$/g) || [line]).map(t => { const sp = document.createElement('span'); sp.className = 'sent'; sp.textContent = t.trim() + ' '; return sp; });
+      return i ? [document.createElement('br'), ...parts] : parts;
+    }));
+  });
   $$('[data-photo]').forEach(el => { el.outerHTML = photo(get(C, el.dataset.photo), el.dataset.label || '대표 작업 사진', '', el.dataset.photo); });
 }
 function bindSite() {

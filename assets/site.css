@@ -254,3 +254,8 @@ button{font:inherit;color:inherit;cursor:pointer}
   .sheet .top{padding:14px 20px}.qbar{padding:14px 20px 0}.sheet .scroll{padding:6px 20px 24px}.qnav{padding:12px 20px calc(12px + env(safe-area-inset-bottom))}
   .qstep h3{font-size:22px}
 }
+
+/* 관리자 미리보기 전용 */
+.pv-hi{outline:3px solid #ff7a00!important;outline-offset:6px;border-radius:6px;transition:outline-color .3s}
+#pvToast{position:fixed;left:50%;bottom:24px;transform:translate(-50%,20px);background:#1c1c1c;color:#fff;font-size:14px;padding:10px 16px;border-radius:999px;opacity:0;transition:all .3s;z-index:99;pointer-events:none;white-space:nowrap}
+#pvToast.show{opacity:1;transform:translate(-50%,0)}

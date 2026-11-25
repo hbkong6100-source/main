@@ -11,6 +11,7 @@ const CONFIG = {
 };
 const DEFAULTS = window.SITE_CONTENT || {};
 let C = DEFAULTS;
+let quoteApi = null;
 const $ = (s, r = document) => r.querySelector(s);
 const $$ = (s, r = document) => [...r.querySelectorAll(s)];
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -35,13 +36,13 @@ const touch = (() => {
 function track(name, params) { try { if (typeof gtag === 'function') gtag('event', name, Object.assign({ page_category: document.body.dataset.page || '' }, params || {})); } catch (e) {} }
 
 /* ── 콘텐츠 바인딩 ── */
-function photo(src, label, tag) {
+function photo(src, label, tag, path) {
   const s = safeUrl(src) || (/^(assets|images)\//.test(src || '') ? src : '');
-  return `<div class="photo">${s ? `<img src="${esc(s)}" alt="${esc(label)}" loading="lazy">` : `<div class="ph">${esc(label)}<br>실제 사진 등록 예정</div>`}${tag ? `<span class="tag">${esc(tag)}</span>` : ''}</div>`;
+  return `<div class="photo"${path ? ` data-path="${esc(path)}"` : ''}>${s ? `<img src="${esc(s)}" alt="${esc(label)}" loading="lazy">` : `<div class="ph">${esc(label)}<br>실제 사진 등록 예정</div>`}${tag ? `<span class="tag">${esc(tag)}</span>` : ''}</div>`;
 }
 function bindText() {
   $$('[data-c]').forEach(el => { const v = get(C, el.dataset.c); if (v != null) el.textContent = v; });
-  $$('[data-photo]').forEach(el => { el.outerHTML = photo(get(C, el.dataset.photo), el.dataset.label || '대표 작업 사진'); });
+  $$('[data-photo]').forEach(el => { el.outerHTML = photo(get(C, el.dataset.photo), el.dataset.label || '대표 작업 사진', '', el.dataset.photo); });
 }
 function bindSite() {
   const s = C.site || {};
@@ -185,7 +186,7 @@ function Quote(cfg) {
   document.addEventListener('click', e => { const t = e.target.closest('[data-quote]'); if (t) { e.preventDefault(); open(t.dataset.preset); } });
   $$('[data-kakao-done]', sheet).forEach(b => b.addEventListener('click', () => $('[data-kakao]').click()));
   show(0);
-  return { open };
+  return { open, close, goto(id) { const i = steps.findIndex(s => s.id === id); if (i < 0) return false; main.hidden = false; done.hidden = true; open(); show(i); return true; } };
 }
 
 /* ── 모션 ── */
@@ -203,7 +204,7 @@ function merge(def, over) { if (!isObj(def) || !isObj(over)) return over === und
 function start(content) {
   C = isObj(content) ? merge(DEFAULTS, content) : DEFAULTS;
   bindText(); bindLists(); bindSite();
-  Quote(get(C, 'quote.' + document.body.dataset.page));
+  quoteApi = Quote(get(C, 'quote.' + document.body.dataset.page));
   motion();
   document.documentElement.classList.add('ready');
 }
@@ -214,11 +215,56 @@ async function loadPublished() {
     if (!r.ok) return null; const rows = await r.json(); return rows && rows[0] ? rows[0].content : null;
   } catch (e) { return null; } finally { clearTimeout(t); }
 }
+/* ── 관리자 미리보기: 편집 중인 항목의 노출 위치 표시 ── */
+function pvToast(t) {
+  let el = $('#pvToast'); if (!el) { el = document.createElement('div'); el.id = 'pvToast'; document.body.append(el); }
+  el.textContent = t; el.className = 'show'; clearTimeout(pvToast.t); pvToast.t = setTimeout(() => { el.className = ''; }, 2600);
+}
+function locate(f, quiet) {
+  if (!f || !f.path) return;
+  $$('.pv-hi').forEach(x => x.classList.toggle('pv-hi', false));
+  const path = f.path, label = f.label || '선택한 항목';
+  if (/^quote\./.test(path)) {
+    if (!quoteApi) { pvToast('이 페이지에는 견적 질문지가 없습니다.'); return; }
+    if (f.hidden) { pvToast('숨긴 질문은 고객에게 보이지 않습니다.'); return; }
+    if (!quoteApi.goto(f.stepId)) pvToast('이 질문은 지금 미리보기에 없습니다.');
+    return;
+  }
+  if (quoteApi && $('#quote.open')) quoteApi.close();
+  let els = [];
+  const special = [['site.kakaoUrl', '[data-kakao]'], ['site.blogUrl', '[data-blog]'], ['site.business', '#bizinfo'], ['site.phone', '#bizinfo'], ['banner', '#banner']];
+  special.forEach(([p, sel]) => { if (!els.length && (path === p || path.startsWith(p + '.'))) els = $$(sel); });
+  if (!els.length) {
+    let p = path;
+    while (p) { els = $$(`[data-c="${p}"],[data-path="${p}"],[data-r$=":${p}"]`); if (els.length) break; p = p.includes('.') ? p.slice(0, p.lastIndexOf('.')) : ''; }
+    const c = els[0];
+    if (c && c.matches('[data-r]')) {
+      const kind = c.dataset.r.split(':')[0];
+      if (kind === 'extra') els = [c.children[/excluded/i.test(path) ? 1 : 0] || c];
+      else if (f.index != null) {
+        if (kind === 'types') { const tab = $$('.tab', c)[f.index]; if (tab) tab.click(); els = [c]; }
+        else { const ch = c.children[f.index]; if (ch) { if (ch.tagName === 'DETAILS') ch.open = true; els = [ch]; } }
+      }
+    }
+  }
+  els = els.filter(x => x.offsetParent !== null || getComputedStyle(x).position === 'fixed');
+  if (!els.length) { pvToast(path.startsWith('banner') ? '배너가 꺼져 있거나 문구가 없어 지금은 보이지 않습니다.' : `"${label}"은(는) 이 화면에 표시되지 않습니다.`); return; }
+  els.forEach(x => { x.classList.add('in'); x.classList.add('pv-hi'); });
+  els[0].scrollIntoView({ behavior: quiet ? 'instant' : 'smooth', block: 'center' });
+  pvToast(`📍 "${label}" 표시 위치`);
+}
 const params = new URLSearchParams(location.search);
 if (params.get('preview') === '1' && window.parent !== window) {
   // 관리자 미리보기: 같은 사이트의 관리자 화면이 보낸 임시 내용으로 그립니다(저장되지 않음).
   let started = false;
-  addEventListener('message', e => { if (e.origin !== location.origin || started) return; const d = e.data || {}; if (d.type === 'banjjak-preview' && isObj(d.content)) { started = true; start(d.content); } });
+  addEventListener('message', e => {
+    if (e.origin !== location.origin) return; const d = e.data || {};
+    if (d.type === 'banjjak-preview' && isObj(d.content) && !started) {
+      started = true; start(d.content);
+      if (d.scrollY) requestAnimationFrame(() => window.scrollTo({ top: d.scrollY, behavior: 'instant' }));
+      if (d.focus) setTimeout(() => locate(d.focus, true), 120);
+    } else if (d.type === 'banjjak-locate' && started) locate(d.focus);
+  });
   window.parent.postMessage({ type: 'banjjak-preview-ready' }, location.origin);
   setTimeout(() => { if (!started) { started = true; start(null); } }, 4000);
 } else {

@@ -70,7 +70,8 @@ const R = {
   scope(el, list) { el.innerHTML = list.map(x => `<div class="scope-card" data-rv><h3>${esc(x.area)}<span>${x.items.length}개 항목</span></h3><ul>${x.items.map(i => `<li>${esc(i)}</li>`).join('')}</ul></div>`).join(''); },
   gallery(el, list) { el.innerHTML = list.map(x => `<figure style="margin:0" data-rv><div class="ba">${photo(x.before, x.title + ' 작업 전', 'BEFORE')}${photo(x.after, x.title + ' 작업 후', 'AFTER')}</div><figcaption class="ba-cap">${esc(x.title)}<span>${x.before && x.after ? '실제 작업' : '사진 등록 예정'}</span></figcaption></figure>`).join(''); },
   process(el, list) { el.innerHTML = list.map(x => `<div class="step" data-rv><i></i><h3>${esc(x.title)}</h3><p>${esc(x.desc)}</p></div>`).join(''); },
-  extra(el, x) { el.innerHTML = `<div class="extra-box" data-rv><h3>추가 요금이 생길 수 있는 경우</h3><ul>${x.added.map(i => `<li>${esc(i)}</li>`).join('')}</ul></div><div class="extra-box" data-rv><h3>기본 작업에서 제외되는 범위</h3><ul>${x.excluded.map(i => `<li>${esc(i)}</li>`).join('')}</ul></div>`; },
+  extra(el, x) { el.innerHTML = `<div class="extra-box" data-rv><h3>${esc(x.addedTitle || '추가 요금이 생길 수 있는 경우')}</h3><ul>${x.added.map(i => `<li>${esc(i)}</li>`).join('')}</ul></div><div class="extra-box" data-rv><h3>${esc(x.excludedTitle || '기본 작업에서 제외되는 범위')}</h3><ul>${x.excluded.map(i => `<li>${esc(i)}</li>`).join('')}</ul></div>`; },
+  meta(el, list) { el.innerHTML = list.map(x => `<div><b>${esc(x.k)}</b>${esc(x.v)}</div>`).join(''); },
   faq(el, list) { el.innerHTML = list.map(x => `<details data-rv><summary>${esc(x.q)}<i aria-hidden="true"></i></summary><div class="a">${esc(x.a)}</div></details>`).join(''); }
 };
 function bindLists() { $$('[data-r]').forEach(el => { const [fn, path] = el.dataset.r.split(':'); const v = get(C, path); if (v && R[fn]) R[fn](el, v); }); }
@@ -88,7 +89,7 @@ function Quote(cfg) {
     let inner = '';
     if (s.type === 'single') inner = optHtml(s, 'radio');
     else if (s.type === 'multi') inner = optHtml(s, 'checkbox');
-    else if (s.type === 'text') inner = `<label class="fld"><span class="sr">${esc(s.title)}</span><input name="${esc(s.field)}" maxlength="${s.maxlength || 100}" placeholder="${esc(s.placeholder || '')}" autocomplete="off"></label>`;
+    else if (s.type === 'text') inner = `<label class="fld"><span class="sr">${esc(s.title)}</span><input name="${esc(s.field)}" maxlength="${s.maxlength || 100}" placeholder="${esc(s.placeholder || '')}" autocomplete="off"></label>${s.optional ? '<p class="hint" style="margin-top:-4px">모르시면 비워두셔도 돼요.</p>' : ''}`;
     else if (s.type === 'schedule') inner = `<label class="fld">희망 날짜<input name="date" type="date" min="${today}"></label><div class="sublabel">희망 시간대</div>${optHtml(Object.assign({ columns: 3 }, s), 'radio')}<label class="fld" style="margin-top:16px">다른 후보 날짜 (선택)<input name="alt_dates" maxlength="100" placeholder="예: 12월 13일, 12월 셋째 주"></label>`;
     else if (s.type === 'notes') inner = `<label class="fld">요청 사항 (선택)<textarea name="details" rows="4" maxlength="800" placeholder="예: 오후 3시 이후 이삿짐이 들어와요."></textarea></label><label class="fld">반짝이네 삼촌을 어떻게 알게 되셨나요?<select name="source">${srcOpts}</select></label>`;
     else if (s.type === 'contact') inner = `<div class="summary" id="qsummary"></div><label class="fld">성함<input name="name" maxlength="60" autocomplete="name" placeholder="성함"></label><label class="fld">연락처<input name="phone" type="tel" inputmode="tel" maxlength="30" autocomplete="tel" placeholder="010-0000-0000"></label>
@@ -106,7 +107,7 @@ function Quote(cfg) {
     switch (s.type) {
       case 'single': return picked(s).length === 1;
       case 'multi': return picked(s).length > 0;
-      case 'text': return val(s.field).length >= (s.minlength || 1);
+      case 'text': return s.optional ? true : val(s.field).length >= (s.minlength || 1);
       case 'schedule': return !!val('date') && val('date') >= today && picked(s).length === 1;
       case 'contact': return val('name').length > 0 && /^0[0-9]{8,10}$/.test(digits()) && /^[0-9][0-9 ()-]{6,29}$/.test(val('phone')) && $('#cPrivacy', form).checked;
       default: return true;
@@ -117,7 +118,7 @@ function Quote(cfg) {
     const lines = [];
     steps.forEach(s => {
       if (s.type === 'single' || s.type === 'multi') { const p = picked(s).filter(o => !o.none).map(o => o.label); lines.push(`${(s.label || s.title)}: ${p.join(', ') || '없음'}`); }
-      else if (s.type === 'text') lines.push(`${(s.label || s.title)}: ${val(s.field)}`);
+      else if (s.type === 'text') lines.push(`${(s.label || s.title)}: ${val(s.field) || '없음'}`);
       else if (s.type === 'schedule') lines.push(`희망 일정: ${val('date')} ${picked(s).map(o => o.label).join('')}${val('alt_dates') ? ' / 후보: ' + val('alt_dates') : ''}`);
     });
     return lines.join('\n');
@@ -142,6 +143,14 @@ function Quote(cfg) {
     if (!valid(cur)) { err.textContent = steps[cur].type === 'contact' ? '성함, 연락처(숫자), 필수 동의를 확인해 주세요.' : '항목을 선택하거나 입력해 주세요.'; return; }
     cur < steps.length - 1 ? show(cur + 1) : submit();
   });
+  function details_of() {
+    const o = {};
+    steps.forEach(s => { if (!s.detailKey) return; let v = '';
+      if (s.type === 'single' || s.type === 'multi') v = picked(s).filter(x => !x.none).map(x => x.label).join(', ');
+      else if (s.type === 'text') v = val(s.field);
+      if (v) o[s.detailKey] = v.slice(0, 200); });
+    return o;
+  }
   async function submit() {
     if (submitting) return;
     if (new URLSearchParams(location.search).get('preview') === '1') { err.textContent = '미리보기 화면에서는 견적이 접수되지 않습니다.'; return; }
@@ -151,7 +160,7 @@ function Quote(cfg) {
     const attribution = Object.assign({}, touch.params || {}, currentAd(), { landing_category: cfg.category, landing_page: touch.landing_page || location.pathname, submit_page: location.pathname, first_visit_at: touch.first_visit_at || '' }, touch.referrer ? { referrer: touch.referrer } : {});
     if (!requestId) requestId = (crypto.randomUUID ? crypto.randomUUID() : ([1e7]+-1e3+-4e3+-8e3+-1e11).replace(/[018]/g, c => (c ^ crypto.getRandomValues(new Uint8Array(1))[0] & 15 >> c / 4).toString(16)));
     const payload = { request_id: requestId, name: val('name'), phone: val('phone'), service: svc ? svc.service : '', requested_date: val('date'), area: val('address'), size: val('size'), source: val('source') || '홈페이지', details,
-      privacy_agreed: true, marketing_agreed: $('#cMarketing', form).checked, consent_version: CONFIG.consentVersion, attribution, service_details: {} };
+      privacy_agreed: true, marketing_agreed: $('#cMarketing', form).checked, consent_version: CONFIG.consentVersion, attribution, service_details: details_of() };
     submitting = true; refresh(); next.textContent = '보내는 중…'; err.textContent = '';
     const ctrl = new AbortController(); const timer = setTimeout(() => ctrl.abort(), 15000);
     try {
@@ -166,7 +175,7 @@ function Quote(cfg) {
   $('#qrestart', sheet).addEventListener('click', () => { form.reset(); main.hidden = false; done.hidden = true; show(0); });
   function open(preset) {
     lastFocus = document.activeElement; sheet.classList.add('open'); sheet.setAttribute('aria-hidden', 'false'); document.body.style.overflow = 'hidden';
-    if (preset && cur === 0 && main.hidden === false) { const s = steps[0]; const idx = s.options.findIndex(o => o.label === preset);
+    if (preset && cur === 0 && main.hidden === false) { const s = steps[0]; const idx = s.options.findIndex(o => o.label === preset || o.service === preset);
       if (idx >= 0) { const r = $(`[name="q_${s.id}"][value="${idx}"]`, form); r.checked = true; show(1); return; } }
     show(cur); track('quote_open');
   }

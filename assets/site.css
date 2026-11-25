@@ -89,7 +89,7 @@ button{font:inherit;color:inherit;cursor:pointer}
 @keyframes swap{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
 
 /* Scope */
-.scope{display:grid;grid-template-columns:repeat(4,1fr);gap:16px}
+.scope{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:16px}
 .scope-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:26px 24px}
 .scope-card h3{font-size:19px;margin:0 0 16px;display:flex;justify-content:space-between;align-items:center}
 .scope-card h3 span{font-size:12px;color:var(--muted);font-weight:500}

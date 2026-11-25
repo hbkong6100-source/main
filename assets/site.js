@@ -55,7 +55,10 @@ function bindSite() {
   const b = C.banner || {}; const bn = $('#banner');
   if (bn && b.enabled && b.text) { bn.hidden = false; const u = safeUrl(b.link); bn.innerHTML = u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(b.text)}</a>` : esc(b.text); }
   const biz = s.business || {}; const fb = $('#bizinfo');
-  if (fb) { const parts = [biz.name && '상호 ' + biz.name, biz.owner && '대표 ' + biz.owner, biz.regNo && '사업자등록번호 ' + biz.regNo, biz.address, s.phone && '연락처 ' + s.phone, biz.email].filter(Boolean); fb.textContent = parts.length ? parts.join(' · ') : '사업자 정보 등록 예정'; }
+  if (fb) {
+    const rows = [['상호', biz.name], ['대표', biz.owner], ['사업자등록번호', biz.regNo], ['주소', biz.address], ['연락처', s.phone], ['이메일', biz.email], ['서비스 지역', s.region]].filter(r => r[1]);
+    fb.innerHTML = rows.length ? rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${k === '연락처' ? `<a href="tel:${esc(String(v).replace(/[^0-9+]/g, ''))}">${esc(v)}</a>` : k === '이메일' ? `<a href="mailto:${esc(v)}">${esc(v)}</a>` : esc(v)}</dd></div>`).join('') : '<div><dd>사업자 정보 등록 예정</dd></div>';
+  }
 }
 const R = {
   services(el, list) { el.innerHTML = list.map(x => `<a class="choice" href="${esc(x.href)}" data-rv>${photo(x.image, x.title + ' 대표 사진')}<div class="body"><div class="no">${esc(x.no)} — ${esc(x.en)}</div><h2>${esc(x.title)}</h2><p>${esc(x.desc)}</p></div><span class="go" aria-hidden="true">↗</span></a>`).join(''); },
@@ -232,7 +235,7 @@ function locate(f, quiet) {
   }
   if (quoteApi && $('#quote.open')) quoteApi.close();
   let els = [];
-  const special = [['site.kakaoUrl', '[data-kakao]'], ['site.blogUrl', '[data-blog]'], ['site.business', '#bizinfo'], ['site.phone', '#bizinfo'], ['banner', '#banner']];
+  const special = [['site.kakaoUrl', '[data-kakao]'], ['site.blogUrl', '[data-blog]'], ['site.business', '#bizinfo'], ['site.phone', '#bizinfo'], ['site.region', '#bizinfo'], ['banner', '#banner']];
   special.forEach(([p, sel]) => { if (!els.length && (path === p || path.startsWith(p + '.'))) els = $$(sel); });
   if (!els.length) {
     let p = path;

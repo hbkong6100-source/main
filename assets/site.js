@@ -60,6 +60,8 @@ function bindSite() {
     if (!/^https:\/\/open\.kakao\.com\//.test(u)) { alert('카카오톡 상담 링크를 준비 중입니다. 견적 신청을 이용해 주세요.'); return; }
     track('kakao_click'); window.open(u, '_blank', 'noopener,noreferrer');
   }));
+  const tel = String(s.phone || '').replace(/[^0-9+]/g, '');
+  $$('[data-tel]').forEach(a => { if (tel.length >= 8) { a.href = 'tel:' + tel; a.hidden = false; const t = a.querySelector('[data-tel-text]'); if (t) t.textContent = s.phone; a.addEventListener('click', () => track('phone_click')); } else a.hidden = true; });
   const b = C.banner || {}; const bn = $('#banner');
   if (bn && b.enabled && b.text) { bn.hidden = false; const u = safeUrl(b.link); bn.innerHTML = u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(b.text)}</a>` : esc(b.text); }
   const biz = s.business || {}; const fb = $('#bizinfo');
@@ -89,6 +91,15 @@ const R = {
   process(el, list) { el.innerHTML = list.map(x => `<div class="step" data-rv><i></i><h3>${esc(x.title)}</h3><p>${esc(x.desc)}</p></div>`).join(''); },
   extra(el, x) { el.innerHTML = `<div class="extra-box" data-rv><h3>${esc(x.addedTitle || '추가 요금이 생길 수 있는 경우')}</h3><ul>${x.added.map(i => `<li>${esc(i)}</li>`).join('')}</ul></div><div class="extra-box" data-rv><h3>${esc(x.excludedTitle || '기본 작업에서 제외되는 범위')}</h3><ul>${x.excluded.map(i => `<li>${esc(i)}</li>`).join('')}</ul></div>`; },
   meta(el, list) { el.innerHTML = list.map(x => `<div><b>${esc(x.k)}</b>${esc(x.v)}</div>`).join(''); },
+  promises(el, list) { el.innerHTML = list.map((x, i) => `<div class="pr" data-rv><span>0${i + 1}</span><b>${esc(x.title)}</b><small>${esc(x.desc)}</small></div>`).join(''); },
+  audience(el, list) { el.innerHTML = list.map(x => `<article class="aud" data-rv><span class="aud-tag">${esc(x.tag)}</span><p class="aud-q">“${esc(x.quote)}”</p><ul>${(x.points || []).map(i => `<li>${esc(i)}</li>`).join('')}</ul><button class="btn line" data-quote data-preset="${esc(x.service || x.tag)}">이 공간 견적 받기 <span class="arr">↗</span></button></article>`).join(''); },
+  principles(el, list) { el.innerHTML = list.map((x, i) => `<li data-rv><span class="pn">${i + 1}</span><div><h3>${esc(x.title)}</h3><p>${esc(x.desc)}</p></div></li>`).join(''); },
+  cases(el, list) {
+    const cats = [...new Set(list.map(x => x.category).filter(Boolean))];
+    el.innerHTML = `${cats.length > 1 ? `<div class="chips" role="tablist"><button class="chip" aria-selected="true" data-cat="">전체</button>${cats.map(c => `<button class="chip" aria-selected="false" data-cat="${esc(c)}">${esc(c)}</button>`).join('')}</div>` : ''}<div class="case-grid">${list.map(x => `<figure class="case" data-cat="${esc(x.category || '')}" data-rv><div class="ba">${photo(x.before, x.title + ' 작업 전', 'BEFORE')}${photo(x.after, x.title + ' 작업 후', 'AFTER')}</div><figcaption class="ba-cap">${esc(x.title)}<span>${x.before && x.after ? '실제 작업' : '사진 등록 예정'}</span></figcaption></figure>`).join('')}</div>`;
+    $$('.chip', el).forEach(b => b.addEventListener('click', () => { $$('.chip', el).forEach(o => o.setAttribute('aria-selected', String(o === b))); $$('.case', el).forEach(f => { f.hidden = !!b.dataset.cat && f.dataset.cat !== b.dataset.cat; }); }));
+  },
+  services(el, list) { el.innerHTML = list.map(x => `<article class="svc" data-rv>${photo(x.image, x.title + ' 사진')}<div class="svc-b"><h3>${esc(x.title)}</h3><p>${esc(x.desc)}</p><div class="tags">${(x.tags || []).map(t => `<span>#${esc(t)}</span>`).join('')}</div>${/^[a-z]+\.html$/.test(x.link || '') ? `<a class="more" href="${esc(x.link)}">자세히 보기 →</a>` : `<a class="more" href="#" data-quote>견적 문의 →</a>`}</div></article>`).join(''); },
   faq(el, list) { el.innerHTML = list.map(x => `<details data-rv><summary>${esc(x.q)}<i aria-hidden="true"></i></summary><div class="a">${esc(x.a)}</div></details>`).join(''); }
 };
 function bindLists() { $$('[data-r]').forEach(el => { const [fn, path] = el.dataset.r.split(':'); const v = get(C, path); if (v && R[fn]) R[fn](el, v); }); }
@@ -220,7 +231,7 @@ function merge(def, over) { if (!isObj(def) || !isObj(over)) return over === und
 function start(content) {
   C = isObj(content) ? merge(DEFAULTS, content) : DEFAULTS;
   bindText(); bindLists(); bindSite();
-  quoteApi = Quote(get(C, 'quote.' + document.body.dataset.page));
+  quoteApi = Quote(get(C, 'quote.' + (document.body.dataset.qkey || document.body.dataset.page)));
   motion();
   document.documentElement.classList.add('ready');
 }
@@ -259,7 +270,7 @@ function locate(f, quiet) {
       if (kind === 'extra') els = [c.children[/excluded/i.test(path) ? 1 : 0] || c];
       else if (f.index != null) {
         if (kind === 'types') { const tab = $$('.tab', c)[f.index]; if (tab) tab.click(); els = [c]; }
-        else { const ch = c.children[f.index]; if (ch) { if (ch.tagName === 'DETAILS') ch.open = true; els = [ch]; } }
+        else { const host = kind === 'cases' ? (c.querySelector('.case-grid') || c) : c; if (kind === 'cases') { const all = $('.chip', c); if (all) all.click(); } const ch = host.children[f.index]; if (ch) { if (ch.tagName === 'DETAILS') ch.open = true; els = [ch]; } }
       }
     }
   }

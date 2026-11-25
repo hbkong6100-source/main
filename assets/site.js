@@ -56,8 +56,13 @@ function bindSite() {
   if (bn && b.enabled && b.text) { bn.hidden = false; const u = safeUrl(b.link); bn.innerHTML = u ? `<a href="${esc(u)}" target="_blank" rel="noopener">${esc(b.text)}</a>` : esc(b.text); }
   const biz = s.business || {}; const fb = $('#bizinfo');
   if (fb) {
-    const rows = [['상호', biz.name], ['대표', biz.owner], ['사업자등록번호', biz.regNo], ['주소', biz.address], ['연락처', s.phone], ['이메일', biz.email], ['서비스 지역', s.region]].filter(r => r[1]);
-    fb.innerHTML = rows.length ? rows.map(([k, v]) => `<div><dt>${esc(k)}</dt><dd>${k === '연락처' ? `<a href="tel:${esc(String(v).replace(/[^0-9+]/g, ''))}">${esc(v)}</a>` : k === '이메일' ? `<a href="mailto:${esc(v)}">${esc(v)}</a>` : esc(v)}</dd></div>`).join('') : '<div><dd>사업자 정보 등록 예정</dd></div>';
+    const item = (k, v, html) => v ? `<span class="bi">${k ? `<span class="bk">${esc(k)} :</span> ` : ''}${html || esc(v)}</span>` : '';
+    const tel = s.phone ? `<a href="tel:${esc(String(s.phone).replace(/[^0-9+]/g, ''))}">${esc(s.phone)}</a>` : '';
+    const mail = biz.email ? `<a href="mailto:${esc(biz.email)}">${esc(biz.email)}</a>` : '';
+    const line1 = [item('', biz.name), item('대표자', biz.owner), item('', biz.address), item('사업자등록번호', biz.regNo)].filter(Boolean);
+    const line2 = [item('연락처', s.phone, tel), item('이메일', biz.email, mail), item('서비스 지역', s.region)].filter(Boolean);
+    const sep = '<span class="bs" aria-hidden="true">|</span>';
+    fb.innerHTML = (line1.length || line2.length) ? [line1, line2].filter(l => l.length).map(l => `<p>${l.join(sep)}</p>`).join('') : '<p>사업자 정보 등록 예정</p>';
   }
 }
 const R = {

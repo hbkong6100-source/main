@@ -26,6 +26,8 @@ button{font:inherit;color:inherit;cursor:pointer}
 .btn.line:hover{border-color:var(--ink)}
 .btn.kakao{background:#FEE500;border-color:#FEE500;color:#191600}
 .btn.kakao:hover{background:#f5dc00}
+.btn.blog{background:#03C75A;border-color:#03C75A;color:#fff}
+.btn.blog:hover{background:#02b350}
 .btn .arr{transition:transform .3s var(--ease)}.btn:hover .arr{transform:translate(2px,-2px)}
 
 /* Banner */
@@ -45,6 +47,8 @@ button{font:inherit;color:inherit;cursor:pointer}
 .nav a:hover::after,.nav a[aria-current=page]::after{transform:scaleX(1);transform-origin:left}
 .hd-cta{display:flex;gap:8px}
 .hd-cta .btn{height:42px;padding:0 18px;font-size:14px}
+@media(max-width:1320px){.biz-page .hd .tel{display:none}}
+@media(max-width:1180px){.hd-cta .btn{padding:0 14px}.nav{gap:22px}}
 
 /* Hero */
 .hero{padding:clamp(56px,9vw,120px) 0 clamp(64px,8vw,110px)}

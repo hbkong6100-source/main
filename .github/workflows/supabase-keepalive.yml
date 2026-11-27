@@ -1,0 +1,97 @@
+# 반짝이네 삼촌 — Supabase 무료 플랜 휴면(일시정지) 방지
+# 주 3회(월·수·금 오전 9:23, 한국 시간) Supabase에 점검 요청을 보냅니다.
+# - 실패하면 이 저장소에 "Supabase 휴면 방지 점검 실패" 이슈를 만들어 알려줍니다.
+# - GitHub는 60일 동안 저장소 변경이 없으면 예약 작업을 멈추는데, 매번 실행 끝에 다시 "사용"으로 설정해 이를 막습니다.
+# - 수동 실행: GitHub > Actions > "Supabase 휴면 방지 점검" > Run workflow
+# 필요한 Supabase 설정: supabase/keepalive.sql (admin 저장소) 을 SQL Editor에서 한 번 실행
+name: Supabase 휴면 방지 점검
+
+on:
+  schedule:
+    - cron: '23 0 * * 1,3,5'   # UTC 00:23 = 한국 09:23, 월·수·금
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths: ['.github/workflows/supabase-keepalive.yml']
+
+permissions:
+  contents: read
+  actions: write
+  issues: write
+
+concurrency:
+  group: supabase-keepalive
+  cancel-in-progress: false
+
+env:
+  SUPABASE_URL: https://wqojzrpsfjkecfybmuax.supabase.co
+  # 공개용(publishable) 키입니다. 홈페이지 코드에도 들어 있는 키라 노출되어도 안전합니다.
+  # 절대로 secret / service_role 키를 이 파일에 넣지 마세요.
+  SUPABASE_PUBLISHABLE_KEY: sb_publishable_VmJzx86G5PeNmazwCRXWgQ_Wdgaz5EC
+
+jobs:
+  ping:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Supabase 점검 요청 (최대 4번 재시도)
+        run: |
+          set -u
+          ok=0
+          for i in 1 2 3 4; do
+            code=$(curl -sS -o resp.json -w '%{http_code}' --max-time 30 \
+              -X POST "$SUPABASE_URL/rest/v1/rpc/keepalive_ping" \
+              -H "apikey: $SUPABASE_PUBLISHABLE_KEY" -H 'Content-Type: application/json' \
+              -d '{"p_source":"github-actions"}' || echo 000)
+            echo "시도 $i: HTTP $code"; cat resp.json 2>/dev/null || true; echo
+            if [ "$code" = "200" ]; then ok=1; break; fi
+            if [ "$code" = "404" ]; then
+              # 점검 함수가 아직 없으면 읽기 요청으로 대신합니다.
+              code=$(curl -sS -o resp.json -w '%{http_code}' --max-time 30 \
+                "$SUPABASE_URL/rest/v1/site_content?id=eq.published&select=updated_at" \
+                -H "apikey: $SUPABASE_PUBLISHABLE_KEY" || echo 000)
+              echo "대체 읽기 요청: HTTP $code"
+              if [ "$code" = "200" ]; then
+                ok=1
+                echo "::warning::keepalive_ping 함수가 없습니다. admin 저장소의 supabase/keepalive.sql을 Supabase SQL Editor에서 실행해 주세요."
+                break
+              fi
+            fi
+            sleep $((i * 30))
+          done
+          if [ "$ok" != "1" ]; then
+            echo "::error::Supabase가 응답하지 않습니다. Supabase 대시보드에서 프로젝트가 일시정지(Paused)되었는지 확인하세요."
+            exit 1
+          fi
+          echo "점검 완료"
+
+      - name: 예약 작업이 60일 뒤 멈추지 않도록 유지
+        if: always()
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          if gh api -X PUT "repos/${{ github.repository }}/actions/workflows/supabase-keepalive.yml/enable"; then
+            echo "예약 작업 유지 설정 완료"
+          else
+            echo "::warning::예약 작업 유지 설정에 실패했습니다. GitHub > Actions에서 이 작업이 켜져 있는지 확인해 주세요."
+          fi
+
+      - name: 실패 시 알림 이슈 만들기
+        if: failure()
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          title="⚠️ Supabase 휴면 방지 점검 실패"
+          body="$(date -u -d '+9 hours' '+%Y-%m-%d %H:%M') (한국 시간) 점검이 실패했습니다.
+
+          1. Supabase 대시보드(https://supabase.com/dashboard/project/wqojzrpsfjkecfybmuax)에서 프로젝트가 일시정지(Paused)인지 확인하세요. 일시정지라면 Restore 버튼으로 다시 켭니다.
+          2. 실행 기록: $RUN_URL
+
+          다음 점검이 성공하면 이 이슈는 닫으셔도 됩니다."
+          num=$(gh issue list --repo "${{ github.repository }}" --state open --search "$title in:title" --json number --jq '.[0].number' || true)
+          if [ -n "$num" ]; then
+            gh issue comment "$num" --repo "${{ github.repository }}" --body "$body"
+          else
+            gh issue create --repo "${{ github.repository }}" --title "$title" --body "$body"
+          fi
